@@ -69,7 +69,12 @@ name = "leptos_animate"
 # Closure::forget() to happen before listener registration, so a cancelled
 # spawn_local task can no longer drop a Closure that still has live listeners
 # ("closure invoked recursively or after being dropped").
-version = "0.1.15"
+#
+# 0.1.16 stops animation_frame() panicking when the awaiting task is cancelled
+# - navigating between routes disposes owners and drops the receiver while the
+# queued requestAnimationFrame callbacks are still pending, and `send`/`await`
+# both unwrapped. sleep() in the same module already handled this correctly.
+version = "0.1.16"
 edition.workspace = true
 description = "Animation utilities for Leptos. FLIP, in/out transitions, and helpers for custom animations."
 repository = "https://github.com/soundprojects/leptos-animate"

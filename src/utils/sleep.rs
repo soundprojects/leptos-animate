@@ -13,5 +13,7 @@ pub async fn sleep(duration: Duration) {
         duration,
     );
 
-    rx.await.unwrap();
+    // Same reasoning as animation_frame(): the sender can be dropped without
+    // firing if the owner is disposed first, and that is not a panic.
+    _ = rx.await;
 }
