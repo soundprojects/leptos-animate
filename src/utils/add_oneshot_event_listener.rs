@@ -1,5 +1,4 @@
-use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{AddEventListenerOptions, EventTarget};
+use web_sys::{js_sys::Function, AddEventListenerOptions, EventTarget};
 
 use crate::utils::log_error;
 
@@ -11,17 +10,23 @@ thread_local! {
     };
 }
 
+/// Takes an already-leaked `Function` rather than a `&Closure`.
+///
+/// Callers must ensure the underlying Rust closure outlives the listener -
+/// in practice by calling `Closure::forget()` *before* registering, not
+/// afterwards. Registering first and forgetting later is unsafe whenever the
+/// code in between can be cancelled: dropping the Closure while a listener is
+/// still attached produces "closure invoked recursively or after being
+/// dropped" when the event eventually fires.
 pub fn add_oneshot_event_listener(
     target: &EventTarget,
     type_: &str,
-    closure: &Closure<dyn Fn()>,
+    callback: &Function,
 ) {
     OPTIONS.with(|options| {
         if target
             .add_event_listener_with_callback_and_add_event_listener_options(
-                type_,
-                closure.as_ref().unchecked_ref(),
-                options,
+                type_, callback, options,
             )
             .is_err()
         {

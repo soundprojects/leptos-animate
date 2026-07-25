@@ -1,6 +1,11 @@
 use leptos::task::spawn_local;
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{AnimationPlayState, GetAnimationsOptions, HtmlElement};
+use web_sys::{
+    js_sys::Function,
+    AnimationPlayState,
+    GetAnimationsOptions,
+    HtmlElement,
+};
 
 use super::{add_oneshot_event_listener, animation_frame};
 
@@ -45,12 +50,26 @@ fn get_animations(element: &HtmlElement, subtree: bool) -> Vec<web_sys::Animatio
 
 impl OnAnimationsFinishedExt for HtmlElement {
     fn on_animations_finished(&self, cb: impl Fn() + 'static, subtree: bool) {
-        let animations = get_animations(self, subtree);
-
+        // Leak the Closure up front and work with the plain JS Function from
+        // here on.
+        //
+        // This used to register the listeners first and call
+        // `closure.forget()` at the end of the spawn_local block below. That
+        // is only sound if the block always runs to completion - and it
+        // doesn't: leptos cancels spawned tasks when the owner is disposed,
+        // which happens constantly for rows leaving a list. A cancelled task
+        // dropped the Closure while `finish` listeners were still attached to
+        // running animations, and firing one then panicked the app with
+        // "closure invoked recursively or after being dropped".
+        //
+        // Forgetting first makes the ordering irrelevant: the Rust closure is
+        // never dropped, so a listener firing at any point is safe.
         let closure = Closure::<dyn Fn()>::new(cb);
+        let func = closure.as_ref().unchecked_ref::<Function>().clone();
+        closure.forget();
 
-        for animation in &animations {
-            add_oneshot_event_listener(animation, "finish", &closure);
+        for animation in &get_animations(self, subtree) {
+            add_oneshot_event_listener(animation, "finish", &func);
         }
 
         // sometimes animations appear in the next tick, so let's catch them too
@@ -60,18 +79,8 @@ impl OnAnimationsFinishedExt for HtmlElement {
                 animation_frame().await;
 
                 for animation in get_animations(&element, subtree) {
-                    add_oneshot_event_listener(&animation, "finish", &closure);
+                    add_oneshot_event_listener(&animation, "finish", &func);
                 }
-
-                // NOTE: this leaks one `Closure` per call, by design - the
-                // listeners registered above have to outlive this scope and
-                // there is nothing tracking when the last of them has fired.
-                // It is bounded only because the filter above keeps the number
-                // of calls that actually register anything small. If this is
-                // ever revisited, holding the closure in an Rc owned by the
-                // animation and dropping it on cleanup would remove the leak
-                // outright.
-                closure.forget();
             }
         });
     }

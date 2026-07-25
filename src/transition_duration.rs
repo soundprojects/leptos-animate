@@ -2,8 +2,8 @@ use std::{future::Future, pin::Pin, rc::Rc, time::Duration};
 
 use leptos::task::spawn_local;
 use send_wrapper::SendWrapper;
-use wasm_bindgen::prelude::Closure;
-use web_sys::HtmlElement;
+use wasm_bindgen::{prelude::Closure, JsCast};
+use web_sys::{js_sys::Function, HtmlElement};
 
 use crate::utils::{add_oneshot_event_listener, sleep, OnAnimationsFinishedExt};
 
@@ -58,9 +58,12 @@ impl TransitionDuration {
             event_type: &str,
             cb: impl Fn(&HtmlElement) + 'static,
         ) {
+            // Forget before registering, same ordering rule as
+            // on_animations_finished: the Closure must outlive the listener.
             let closure = build_closure(element, cb);
-            add_oneshot_event_listener(element, event_type, &closure);
+            let func = closure.as_ref().unchecked_ref::<Function>().clone();
             closure.forget();
+            add_oneshot_event_listener(element, event_type, &func);
         }
 
         match self {
