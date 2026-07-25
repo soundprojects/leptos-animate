@@ -59,10 +59,20 @@ must_use_candidate = "allow"
 
 [package]
 name = "leptos_animate"
-version = "0.1.14"
+# Fork of brofrain/leptos-animate 0.1.14.
+#
+# 0.1.15 fixes unbounded `finish`-listener accumulation in
+# on_animations_finished: getAnimations() keeps returning CSS animations that
+# have already completed when they use `animation-fill-mode: forwards`, and
+# since the function re-runs on every parent mutation, `once: true` listeners
+# piled up on animations that can never fire again. Also reorders
+# Closure::forget() to happen before listener registration, so a cancelled
+# spawn_local task can no longer drop a Closure that still has live listeners
+# ("closure invoked recursively or after being dropped").
+version = "0.1.15"
 edition.workspace = true
 description = "Animation utilities for Leptos. FLIP, in/out transitions, and helpers for custom animations."
-repository = "https://github.com/brofrain/leptos-animate"
+repository = "https://github.com/soundprojects/leptos-animate"
 license = "MIT"
 
 [dependencies]
